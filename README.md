@@ -1,282 +1,93 @@
-# OpsIntel RAG
+# RAG Pipeline
 
-**Production-grade Operational Intelligence RAG Platform**
 
-Dual-retrieval architecture combining live telemetry evidence with enterprise
-knowledge (runbooks, SOPs, RCA reports) for AI-assisted incident investigation.
 
----
+## Getting started
 
-## Architecture Overview
+To make it easy for you to get started with GitLab, here's a list of recommended next steps.
 
-```
-Clients / Dashboards
-    ↓ HTTPS
-Go API Gateway  (auth · RBAC · routing · SSE)
-    ↓ HTTP
-AI Orchestrator  (FastAPI · Python 3.12)
-    ├── Correlation Engine  →  TelemetryProvider (Mock | Dynatrace | Grafana | OTel)
-    ├── RAG Retrieval       →  Qdrant (dense + sparse + metadata filter + reranking)
-    ├── Context Builder
-    └── LLM Provider        →  llama.cpp | vLLM  (OpenAI-compatible)
-         ↓
-    InvestigationResponse (structured JSON)
+Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
 
-Infrastructure: PostgreSQL · Qdrant · Apache Kafka · OTel Collector
-```
+## Add your files
 
-Full architecture document: [`docs/architecture.md`](docs/architecture.md)
-
----
-
-## Quick Start
-
-### Prerequisites
-
-| Tool | Version |
-|------|---------|
-| Docker | ≥ 24 |
-| Docker Compose | ≥ 2.24 |
-| Python | ≥ 3.12 (for local dev) |
-| Go | ≥ 1.22 (for gateway dev) |
-
-### 1. Clone and configure
-
-```bash
-git clone https://github.com/your-org/opsintel-rag.git
-cd opsintel-rag
-cp .env.example .env
-# Edit .env — set SECRET_KEY and POSTGRES_PASSWORD at minimum
-```
-
-### 2. Start infrastructure services
-
-```bash
-cd deployments/docker
-docker compose up -d postgres qdrant kafka zookeeper otel-collector
-```
-
-### 3. Start the AI Orchestrator (without LLM)
-
-```bash
-docker compose up -d ai-orchestrator ingestion
-```
-
-The orchestrator starts with `TELEMETRY_PROVIDER=mock` and `OIDC_ENABLED=false`,
-so you can immediately make requests using the dev principal.
-
-### 4. Verify health
-
-```bash
-curl http://localhost:8000/api/v1/health | python3 -m json.tool
-```
-
-### 5. (Optional) Start llama.cpp with a model
-
-Download a GGUF model and mount it:
-
-```bash
-# Example using Mistral 7B Instruct Q4_K_M
-wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf \
-  -O deployments/docker/models/mistral-7b-instruct.gguf
-
-LLAMACPP_MODEL_FILE=mistral-7b-instruct.gguf docker compose --profile llm up -d llamacpp
-```
-
----
-
-## API Reference
-
-Swagger UI is available at `http://localhost:8000/docs` (development mode only).
-
-### Investigate an Incident
-
-```bash
-curl -X POST http://localhost:8000/api/v1/investigate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "The order service is timing out intermittently — what could be causing this?",
-    "services": ["order-service"],
-    "environment": "production",
-    "time_range_minutes": 60
-  }'
-```
-
-**Response (structured JSON):**
-
-```json
-{
-  "investigation_id": "...",
-  "incident_summary": "The order-service is experiencing connection pool exhaustion...",
-  "affected_services": ["order-service"],
-  "observations": [
-    {"finding": "100% connection pool utilisation", "evidence_type": "FACT", "source": "metric"}
-  ],
-  "root_cause_hypotheses": [
-    {
-      "hypothesis": "Connection leak introduced by recent deployment",
-      "confidence": 0.82,
-      "evidence_type": "HYPOTHESIS",
-      "supporting_evidence": ["Deployment 2.14.1 two hours prior", "Gradual pool increase"],
-      "contradicting_evidence": []
-    }
-  ],
-  "recommended_checks": ["Review connection pool metrics over 24h", "Check deployment logs"],
-  "recommended_remediation": ["Restart order-service pods", "Roll back to 2.13.x"]
-}
-```
-
-### Ingest a Runbook
-
-```bash
-curl -X POST http://localhost:8000/api/v1/ingest \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Order Service Connection Pool Runbook",
-    "source_type": "runbook",
-    "document_type": "runbook",
-    "service_name": "order-service",
-    "environment": "production",
-    "content": "## Symptoms\nConnection pool exhausted...\n\n## Steps\n1. Check HikariCP metrics..."
-  }'
-```
-
-### Create an Incident
-
-```bash
-curl -X POST http://localhost:8000/api/v1/incidents \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Order service connection pool exhausted",
-    "severity": "CRITICAL",
-    "environment": "production",
-    "services": ["order-service"]
-  }'
-```
-
----
-
-## Project Structure
+* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
+* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
 
 ```
-opsintel-rag/
-├── services/
-│   ├── ai-orchestrator/          # Python 3.12 FastAPI — core AI service
-│   │   ├── app/
-│   │   │   ├── api/routes/       # FastAPI route handlers
-│   │   │   ├── agents/           # InvestigationAgent, ContextBuilder
-│   │   │   ├── rag/              # Chunker, Parser, BM25, VectorStore, Ingestion, Retrieval
-│   │   │   ├── telemetry/        # TelemetryProvider interface + Mock/Dynatrace/Grafana
-│   │   │   ├── correlation/      # CorrelationEngine
-│   │   │   ├── inference/        # LLMProvider, LlamaCppProvider, VLLMProvider
-│   │   │   ├── embeddings/       # EmbeddingProvider (sentence-transformers)
-│   │   │   ├── models/           # Pydantic domain models + SQLAlchemy ORM
-│   │   │   ├── security/         # JWT auth, RBAC, sanitisation
-│   │   │   ├── db/               # Async SQLAlchemy session
-│   │   │   └── config.py         # Pydantic Settings (env-based)
-│   │   └── tests/                # pytest unit tests
-│   ├── ingestion/                # Standalone ingestion microservice
-│   └── gateway/                  # Go API Gateway
-│       ├── cmd/gateway/          # main.go
-│       └── internal/             # config, middleware, proxy, routes
-├── deployments/
-│   ├── docker/                   # Docker Compose + service configs
-│   │   ├── docker-compose.yml
-│   │   ├── postgres/init.sql
-│   │   ├── qdrant/config.yaml
-│   │   └── otel/collector-config.yaml
-│   └── kubernetes/               # (Milestone 4)
-├── docs/
-│   └── architecture.md
-├── .env.example
-└── README.md
+cd existing_repo
+git remote add origin https://gitlab.com/fitriaprasari/rag-pipeline.git
+git branch -M main
+git push -uf origin main
 ```
 
----
+## Integrate with your tools
 
-## Configuration
+* [Set up project integrations](https://gitlab.com/fitriaprasari/rag-pipeline/-/settings/integrations)
 
-All configuration is via environment variables. Copy `.env.example` to `.env`.
+## Collaborate with your team
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLM_PROVIDER` | `llamacpp` | LLM backend: `llamacpp` or `vllm` |
-| `LLM_BASE_URL` | `http://llamacpp:8080/v1` | OpenAI-compatible endpoint |
-| `TELEMETRY_PROVIDER` | `mock` | Telemetry source: `mock`, `dynatrace`, `grafana` |
-| `OIDC_ENABLED` | `false` | Enable OIDC JWT validation |
-| `EMBEDDING_MODEL` | `BAAI/bge-large-en-v1.5` | HuggingFace embedding model |
-| `RERANKER_ENABLED` | `true` | Enable cross-encoder reranking |
-| `CORRELATION_WINDOW_BEFORE_MINUTES` | `10` | Time window before incident |
+* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
+* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
+* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
+* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
+* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
 
-See `.env.example` for the full list.
+## Test and Deploy
 
----
+Use the built-in continuous integration in GitLab.
 
-## Running Tests
+* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
+* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
+* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
+* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
+* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
 
-```bash
-cd services/ai-orchestrator
-pip install -e ".[dev]"
-pytest tests/ -v
-```
+***
 
-Tests are self-contained and do not require running databases or LLM servers.
-All external I/O is mocked.
+# Editing this README
 
----
+When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
 
-## Switching LLM Backends
+## Suggestions for a good README
 
-**llama.cpp (local CPU/GPU):**
-```env
-LLM_PROVIDER=llamacpp
-LLM_BASE_URL=http://llamacpp:8080/v1
-LLM_MODEL_NAME=mistral-7b-instruct
-```
+Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
-**vLLM (GPU accelerated):**
-```env
-LLM_PROVIDER=vllm
-LLM_BASE_URL=http://vllm:8000/v1
-LLM_MODEL_NAME=mistralai/Mistral-7B-Instruct-v0.2
-```
+## Name
+Choose a self-explaining name for your project.
 
-No code changes required — only environment variable changes.
+## Description
+Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
 
----
+## Badges
+On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
-## Security
+## Visuals
+Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
 
-- **Authentication:** OIDC/OAuth2 JWT when `OIDC_ENABLED=true`. Dev bypass when false.
-- **Authorization:** RBAC — roles `admin`, `operator`, `viewer`, `ingest`.
-- **Prompt injection protection:** Input sanitisation on all query fields.
-- **Document access control:** Per-document `access_policy` enforced at retrieval.
-- **No hard-coded credentials:** All secrets via environment variables.
-- **Audit logging:** Every action written to `audit_log` table.
+## Installation
+Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
----
+## Usage
+Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+
+## Support
+Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
 ## Roadmap
-
-| Milestone | Status | Description |
-|-----------|--------|-------------|
-| 1 | ✅ Complete | Foundation: RAG pipeline, mock telemetry, llama.cpp |
-| 2 | Planned | Live telemetry: Dynatrace, Grafana, Kafka consumers |
-| 3 | Planned | Full Go gateway: OIDC, SSE streaming, rate limiting |
-| 4 | Planned | Kubernetes Helm charts, multi-replica, Qdrant cluster |
-
----
+If you have ideas for releases in the future, it is a good idea to list them in the README.
 
 ## Contributing
+State if you are open to contributions and what your requirements are for accepting them.
 
-1. Fork the repository.
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Write tests for all new code.
-4. Ensure `pytest` passes: `pytest services/ai-orchestrator/tests/ -v`
-5. Submit a pull request.
+For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
 
----
+You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+
+## Authors and acknowledgment
+Show your appreciation to those who have contributed to the project.
 
 ## License
+For open source projects, say how it is licensed.
 
-Apache 2.0 — see `LICENSE` file.
+## Project status
+If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
