@@ -1,0 +1,37 @@
+Metadata-Version: 2.4
+Name: opsintel-ai-orchestrator
+Version: 0.1.0
+Summary: OpsIntel RAG — AI Orchestrator Service
+Requires-Python: >=3.12
+Requires-Dist: fastapi>=0.111.0
+Requires-Dist: uvicorn[standard]>=0.29.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: pydantic>=2.7.0
+Requires-Dist: pydantic-settings>=2.3.0
+Requires-Dist: sqlalchemy[asyncio]>=2.0.30
+Requires-Dist: asyncpg>=0.29.0
+Requires-Dist: alembic>=1.13.1
+Requires-Dist: qdrant-client>=1.9.0
+Requires-Dist: aiokafka>=0.11.0
+Requires-Dist: python-jose[cryptography]>=3.3.0
+Requires-Dist: passlib[bcrypt]>=1.7.4
+Requires-Dist: cryptography>=42.0.0
+Requires-Dist: tenacity>=8.3.0
+Requires-Dist: structlog>=24.2.0
+Requires-Dist: prometheus-client>=0.20.0
+Requires-Dist: rank-bm25>=0.2.2
+Requires-Dist: numpy>=1.26.0
+Provides-Extra: embeddings
+Requires-Dist: sentence-transformers>=3.0.0; extra == "embeddings"
+Requires-Dist: torch>=2.3.0; extra == "embeddings"
+Requires-Dist: transformers>=4.41.0; extra == "embeddings"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0.0; extra == "dev"
+Requires-Dist: httpx>=0.27.0; extra == "dev"
+Requires-Dist: ruff>=0.4.0; extra == "dev"
+Requires-Dist: mypy>=1.10.0; extra == "dev"
+Requires-Dist: types-python-jose; extra == "dev"
+Requires-Dist: types-passlib; extra == "dev"
