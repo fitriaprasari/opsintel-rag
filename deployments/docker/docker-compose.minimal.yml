@@ -1,4 +1,4 @@
-# version: "3.9"
+version: "3.9"
 
 # ── Minimal dev stack ──────────────────────────────────────────────────────────
 # Starts ONLY PostgreSQL and Qdrant.

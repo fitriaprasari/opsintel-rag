@@ -10,7 +10,7 @@ Run the full test suite without any database, Qdrant, or LLM.
 Everything is mocked.
 
 ```bash
-cd opcdsintel-rag/services/ai-orchestrator
+cd opsintel-rag/services/ai-orchestrator
 
 # Create a Python 3.12 virtual environment
 python3.12 -m venv .venv
@@ -19,7 +19,8 @@ source .venv/bin/activate       # Windows: .venv\Scripts\activate
 # Install core + dev dependencies (no torch, no sentence-transformers)
 pip install -e ".[dev]"
 
-# Run all unit test
+# Run all unit tests
+pytest tests/ -v
 ```
 
 Expected output:
@@ -50,6 +51,7 @@ Uses mock LLM and mock embeddings — no model download needed.
 - Python 3.12+
 
 ### Step 2: Start infrastructure (PostgreSQL + Qdrant)
+
 ```bash
 cd opsintel-rag
 
@@ -250,7 +252,7 @@ After starting Qdrant, browse to:
 
 You'll see the `operational_knowledge` collection after ingesting the first document.
 
---- z
+---
 
 ## Stopping Everything
 
