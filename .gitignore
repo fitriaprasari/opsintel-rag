@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+*.dylib
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.o
+*.a
+vendor/
+go.sum
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Docker / K8s secrets
+*.env
+!*.env.example
+*.pem
+*.key
+*.crt
+
+# Data
+*.gguf
+*.bin
+models/
+data/
+
+# Misc
+*.log
+*.tmp
+.terraform/
+terraform.tfstate*

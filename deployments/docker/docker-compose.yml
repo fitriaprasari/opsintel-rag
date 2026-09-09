@@ -1,0 +1,216 @@
+version: "3.9"
+
+# ── Networks ───────────────────────────────────────────────────────────────
+networks:
+  opsintel:
+    driver: bridge
+
+# ── Volumes ────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  qdrant_data:
+  kafka_data:
+  zookeeper_data:
+  llamacpp_models:
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-opsintel}
+      POSTGRES_USER: ${POSTGRES_USER:-opsintel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deployments/docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-opsintel} -d ${POSTGRES_DB:-opsintel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opsintel
+
+  # ── Qdrant ─────────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./deployments/docker/qdrant/config.yaml:/qdrant/config/production.yaml:ro
+    ports:
+      - "6333:6333"   # REST
+      - "6334:6334"   # gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opsintel
+
+  # ── Zookeeper (Kafka dependency) ────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - opsintel
+
+  # ── Apache Kafka ────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - opsintel
+
+  # ── Kafka topic initialiser (runs once and exits) ───────────────────────
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: |
+      bash -c "
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic telemetry-raw --partitions 3 --replication-factor 1 &&
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic incident-events --partitions 3 --replication-factor 1 &&
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic audit-events --partitions 1 --replication-factor 1 &&
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic rag-feedback --partitions 1 --replication-factor 1
+        echo 'Kafka topics created.'
+      "
+    networks:
+      - opsintel
+
+  # ── llama.cpp server ────────────────────────────────────────────────────
+  # Mount a GGUF model file at /models/<filename>.gguf before starting.
+  # Default model placeholder: set LLAMACPP_MODEL_FILE env to your model filename.
+  llamacpp:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    restart: unless-stopped
+    volumes:
+      - llamacpp_models:/models
+    command: >
+      --model /models/${LLAMACPP_MODEL_FILE:-placeholder.gguf}
+      --host 0.0.0.0
+      --port 8080
+      --ctx-size 4096
+      --n-gpu-layers 0
+    ports:
+      - "8080:8080"
+    # Only enable when a model is present — comment out otherwise
+    profiles:
+      - llm
+    networks:
+      - opsintel
+
+  # ── AI Orchestrator ─────────────────────────────────────────────────────
+  ai-orchestrator:
+    build:
+      context: ./services/ai-orchestrator
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      QDRANT_HOST: qdrant
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      LLM_BASE_URL: http://llamacpp:8080/v1
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opsintel
+    volumes:
+      - ./services/ai-orchestrator:/app:ro  # dev hot-reload
+
+  # ── Ingestion Service ───────────────────────────────────────────────────
+  ingestion:
+    build:
+      context: ./services
+      dockerfile: ingestion/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      QDRANT_HOST: qdrant
+    ports:
+      - "8001:8001"
+    networks:
+      - opsintel
+    volumes:
+      - ./services/ingestion:/app:ro
+
+  # ── Go API Gateway ──────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      ai-orchestrator:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      GATEWAY_PORT: "8080"
+      GATEWAY_UPSTREAM_URL: http://ai-orchestrator:8000
+    ports:
+      - "8090:8080"
+    networks:
+      - opsintel
+
+  # ── OpenTelemetry Collector ─────────────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deployments/docker/otel/collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+    networks:
+      - opsintel

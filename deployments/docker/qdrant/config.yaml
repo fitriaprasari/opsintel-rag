@@ -1,0 +1,11 @@
+log_level: info
+storage:
+  storage_path: /qdrant/storage
+service:
+  host: 0.0.0.0
+  http_port: 6333
+  grpc_port: 6334
+  max_request_size_mb: 32
+collection:
+  replication_factor: 1
+  write_consistency_factor: 1
