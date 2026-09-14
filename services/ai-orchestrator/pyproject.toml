@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsintel-ai-orchestrator"
+version = "0.1.0"
+description = "OpsIntel RAG — AI Orchestrator Service"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.9",
+
+    # Pydantic / settings
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.1",
+
+    # Vector store
+    "qdrant-client>=1.9.0",
+
+    # NOTE: sentence-transformers + torch are NOT listed here.
+    # They are large (>1 GB) and only needed when EMBEDDING_MODEL != "mock".
+    # Install them separately:
+    #   pip install -e ".[embeddings]"
+    # or use the pre-built Docker image which includes them.
+
+    # Kafka
+    "aiokafka>=0.11.0",
+
+    # Security / Auth
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "cryptography>=42.0.0",
+
+    # Utilities
+    "tenacity>=8.3.0",
+    "structlog>=24.2.0",
+    "prometheus-client>=0.20.0",
+    "rank-bm25>=0.2.2",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+# Real embedding support (downloads ~130 MB for bge-small or ~1.3 GB for bge-large)
+embeddings = [
+    "sentence-transformers>=3.0.0",
+    "torch>=2.3.0",
+    "transformers>=4.41.0",
+]
+# Unit testing + linting (no ML dependencies)
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.27.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "types-python-jose",
+    "types-passlib",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# Coverage flags only apply when pytest-cov is installed.
+# Run bare `pytest tests/ -v` without coverage, or
+# `pytest tests/ -v --cov=app --cov-report=term-missing` to enable it.
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
