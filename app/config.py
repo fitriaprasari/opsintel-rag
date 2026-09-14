@@ -5,15 +5,22 @@ No hard-coded credentials anywhere in this file.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Resolve .env from the project root (two levels up from this file:
+#   app/config.py → app/ → services/ai-orchestrator/ → services/ → opsintel-rag/)
+_HERE = Path(__file__).resolve().parent          # app/
+_PROJECT_ROOT = _HERE.parent.parent.parent       # opsintel-rag/
+_ENV_FILE = _PROJECT_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
